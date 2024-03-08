@@ -209,9 +209,5 @@ public class RoomSpawner : EditorWindow
         Undo.RegisterCreatedObjectUndo(toSpawn.gameObject, "Spawn prefab");
 
         toSpawn.gameObject.GetComponent<Room>().CheckOtherRooms();
-        for (int i = 0; i < toSpawn.gameObject.GetComponent<Room>().walls.Count; i++)
-        {
-            Debug.Log(toSpawn.gameObject.GetComponent<Room>().walls[i].wall[0].pieceOfWall.position + " " + (toSpawn.gameObject.GetComponent<Room>().walls[i].wall[0].pieceOfWall.position + (toSpawn.gameObject.GetComponent<Room>().walls[i].wall[0].pieceOfWall.forward * toSpawn.gameObject.GetComponent<Room>().checkDistance)) + " " + toSpawn.gameObject.GetComponent<Room>().walls[i].wall[0].pieceOfWall.name);
-        }
     }
 }
