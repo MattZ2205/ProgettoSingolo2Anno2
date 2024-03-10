@@ -24,24 +24,30 @@ public class RoomSpawner : EditorWindow
     [MenuItem("Tools/Spawner")]
     public static void OpenGrid() => GetWindow<RoomSpawner>("Spawn rooms");
 
-    //List<Item> rooms = new List<Item>();
     public Transform room;
     public Material previewMaterial;
 
     SerializedObject so;
     SerializedProperty roomP;
+    SerializedProperty matP;
 
     GameObject[] prefabs;
     bool[] selectedPrefabs;
+    int selTog = -1;
 
     private void OnEnable()
     {
         so = new SerializedObject(this);
         roomP = so.FindProperty("room");
+        matP = so.FindProperty("previewMaterial");
 
         string[] guids = AssetDatabase.FindAssets("t:prefab", new[] { "Assets/Prefabs" });
         IEnumerable<string> paths = guids.Select(AssetDatabase.GUIDToAssetPath);
         prefabs = paths.Select(AssetDatabase.LoadAssetAtPath<GameObject>).ToArray();
+
+        string[] guidsMat = AssetDatabase.FindAssets("t:material", new[] { "Assets/Materials" });
+        IEnumerable<string> pathsMat = guidsMat.Select(AssetDatabase.GUIDToAssetPath);
+        previewMaterial = pathsMat.Select(AssetDatabase.LoadAssetAtPath<Material>).ToArray()[0];
 
         if (selectedPrefabs == null || selectedPrefabs.Length != prefabs.Length)
         {
@@ -68,6 +74,7 @@ public class RoomSpawner : EditorWindow
         GUILayout.Label("(Select one in viewport)", st);
         GUILayout.Space(10);
         EditorGUILayout.PropertyField(roomP);
+        EditorGUILayout.PropertyField(matP);
 
         so.ApplyModifiedProperties();
     }
@@ -88,35 +95,32 @@ public class RoomSpawner : EditorWindow
 
             selectedPrefabs[i] = GUI.Toggle(rect, selectedPrefabs[i], new GUIContent(p.name, icon));
 
-            //if(GUI.Button(rect, p.name))
             if (EditorGUI.EndChangeCheck())
             {
                 room = null;
                 for (int j = 0; j < selectedPrefabs.Length; j++)
                 {
-                    bool selectedOne = false;
                     if (selectedPrefabs[j])
                     {
-                        if (selectedOne) selectedPrefabs[j] = false;
-                        else room = prefabs[j].transform;
-                        selectedOne = true;
+                        if (i != selTog)
+                        {
+                            selectedPrefabs[j] = true;
+                            if (selTog != -1) selectedPrefabs[selTog] = false;
+                            selTog = j;
+                            room = prefabs[j].transform;
+                        }
                     }
                 }
-                //GenerateRPoints();
             }
 
             rect.y += rect.height + 2;
         }
 
-        //GUI.Button(new Rect(10, 130, 100, 100), "A BUTTON");
-
         Handles.EndGUI();
-
 
         Handles.zTest = UnityEngine.Rendering.CompareFunction.LessEqual;
 
         Transform camTF = view.camera.transform;
-        //Ray ray = new(camTF.position, camTF.forward);
 
         if (Event.current.type == EventType.MouseMove)
         {
@@ -140,27 +144,26 @@ public class RoomSpawner : EditorWindow
             }
 
             Vector3 positionedPoint = new();
-
-            Ray ptRay = GetTangentRay(positionedPoint);
-
-            if (Physics.Raycast(ptRay, out RaycastHit ptHit))
+            if (room != null)
             {
-                DrawPoint(ptHit.point);
+                Ray ptRay = GetTangentRay(positionedPoint);
 
-                //Quaternion randomRot = GetRandomRot(ptHit.normal, p.angle);
-                //SpawnPoint pose = new(ptHit.point, Quaternion.identity, positionedPoint);
-                //positionedPoint.Add(pose);
-                positionedPoint = ptHit.point;
+                if (Physics.Raycast(ptRay, out RaycastHit ptHit))
+                {
+                    DrawPoint(ptHit.point);
 
-                Handles.DrawAAPolyLine(6, ptHit.point, ptHit.point + ptHit.normal * 3);
+                    positionedPoint = new(ptHit.point.x, ptHit.point.y + (room.localScale.y / 2), ptHit.point.z);
 
-                DrawPreview(positionedPoint);
-            }
+                    Handles.DrawAAPolyLine(6, ptHit.point, ptHit.point + ptHit.normal * 3);
 
-            if (Event.current.type == EventType.KeyUp & Event.current.keyCode == KeyCode.Space)
-            {
-                //SpawnPrefabs(positionedPoint);
-                view.Repaint();
+                    DrawPreview(positionedPoint);
+                }
+
+                if (Event.current.type == EventType.KeyUp & Event.current.keyCode == KeyCode.Space)
+                {
+                    SpawnPrefabs(positionedPoint, room);
+                    view.Repaint();
+                }
             }
 
             Handles.color = Color.red;
@@ -171,31 +174,6 @@ public class RoomSpawner : EditorWindow
             Handles.DrawAAPolyLine(6, hit.point, hit.point + hitNormal);
 
             Handles.color = Color.white;
-
-
-            //Vector3[] points = new Vector3[circleDetail];
-            //for (int i = 0; i < circleDetail; i++)
-            //{
-            //    float t = i / (float)(circleDetail) - 1;
-            //    float angRad = t * DUEPI;
-            //    Vector2 dir = new Vector2(Mathf.Cos(angRad), Mathf.Sin(angRad));
-            //    Ray r = GetTangentRay(dir);
-
-            //    if (Physics.Raycast(r, out RaycastHit cHit))
-            //    {
-            //        points[i] = cHit.point + cHit.normal * 0.02f;
-            //    }
-            //    else
-            //    {
-            //        points[i] = r.origin;
-            //    }
-            //}
-
-            //Handles.DrawAAPolyLine(points);
-
-
-            //Handles.DrawWireDisc(hit.point, hit.normal, radius);
-            //Handles.DrawAAPolyLine(5, hit.point, hit.point + hit.normal * 2);
         }
 
         void DrawPoint(Vector3 pos)
@@ -206,8 +184,6 @@ public class RoomSpawner : EditorWindow
 
     void DrawPreview(Vector3 pos)
     {
-        //if (pose.spawnData.spawnPrefab == null || spawnPref == null || spawnPref.Count == 0) return;
-
         previewMaterial.SetPass(0);
 
         Matrix4x4 poseToWorldMtx = Matrix4x4.TRS(pos, Quaternion.identity, Vector3.one);
@@ -224,22 +200,18 @@ public class RoomSpawner : EditorWindow
             m.SetPass(0);
             Graphics.DrawMeshNow(mesh, childToWorldMatrix);
         }
-
-        //Mesh mesh = prefab.GetComponent<MeshFilter>().sharedMesh;
-        //Graphics.DrawMeshNow(mesh, ptHit.point, randomRot);
     }
 
-    void SpawnPrefabs(Vector3 pose, GameObject pref)
+    void SpawnPrefabs(Vector3 pose, Transform pref)
     {
-        //Undo.IncrementCurrentGroup();
-
-        // CREAZIONE SENZA LINK AL PREFAB
-        //Transform spawned = Instantiate(prefab, r.point, Quaternion.LookRotation(r.normal), null);
-        //Undo.RegisterCreatedObjectUndo(spawned.gameObject, "Create my GameObject");
-
-        // CREAZIONE CON LINK AL PREFAB
         Transform toSpawn = (Transform)PrefabUtility.InstantiatePrefab(pref);
         toSpawn.SetPositionAndRotation(pose, Quaternion.identity);
         Undo.RegisterCreatedObjectUndo(toSpawn.gameObject, "Spawn prefab");
+
+        toSpawn.gameObject.GetComponent<Room>().CheckOtherRooms();
+        for (int i = 0; i < toSpawn.gameObject.GetComponent<Room>().walls.Count; i++)
+        {
+            Debug.Log(toSpawn.gameObject.GetComponent<Room>().walls[i].wall[0].pieceOfWall.position + " " + (toSpawn.gameObject.GetComponent<Room>().walls[i].wall[0].pieceOfWall.position + (toSpawn.gameObject.GetComponent<Room>().walls[i].wall[0].pieceOfWall.forward * toSpawn.gameObject.GetComponent<Room>().checkDistance)) + " " + toSpawn.gameObject.GetComponent<Room>().walls[i].wall[0].pieceOfWall.name);
+        }
     }
 }
