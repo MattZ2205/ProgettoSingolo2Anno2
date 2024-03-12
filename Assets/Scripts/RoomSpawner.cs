@@ -28,18 +28,15 @@ public class RoomSpawner : EditorWindow
     public Material previewMaterial;
 
     SerializedObject so;
-    SerializedProperty roomP;
-    SerializedProperty matP;
-
+    Transform lastRoomPlaced;
     GameObject[] prefabs;
     bool[] selectedPrefabs;
     int selTog = -1;
+    int movesDone = 0;
 
     private void OnEnable()
     {
         so = new SerializedObject(this);
-        roomP = so.FindProperty("room");
-        matP = so.FindProperty("previewMaterial");
 
         string[] guids = AssetDatabase.FindAssets("t:prefab", new[] { "Assets/Prefabs" });
         IEnumerable<string> paths = guids.Select(AssetDatabase.GUIDToAssetPath);
@@ -72,11 +69,94 @@ public class RoomSpawner : EditorWindow
         st.alignment = TextAnchor.MiddleCenter;
         GUILayout.Label("Rooms", st);
         GUILayout.Label("(Select one in viewport)", st);
-        GUILayout.Space(10);
-        EditorGUILayout.PropertyField(roomP);
-        EditorGUILayout.PropertyField(matP);
+        if (room != null)
+        {
+            GUILayout.Space(10);
+            GUILayout.Label("(Press space to place the object)", st);
+            DrawBoxRoom();
+        }
+        //EditorGUILayout.PropertyField(roomP);
+        //EditorGUILayout.PropertyField(matP);
+        if (GUI.Button(new Rect(/*position.width / 2*/ 1, position.height - 30, position.width - 2, 30), "Undo") && movesDone > 0)
+        {
+            movesDone--;
+            Undo.PerformUndo();
+        }
 
         so.ApplyModifiedProperties();
+    }
+
+    void DrawBoxRoom()
+    {
+        GUIStyle boxStyle = new GUIStyle(GUI.skin.box);
+        boxStyle.normal.background = MakeTex(50, 50, Color.white);
+        boxStyle.alignment = TextAnchor.MiddleCenter;
+        boxStyle.normal.textColor = Color.grey;
+        //GUI.color = Color.white;
+        GUI.Box(new Rect((position.width / 2) - 40, (position.height / 2) - 40, 80, 80), room.transform.name, boxStyle);
+        DrawDoors();
+    }
+
+    void DrawDoors()
+    {
+        Room actualRoom = room.transform.GetComponent<Room>();
+        for (int i = 0; i < actualRoom.walls.Count; i++)
+        {
+            if (actualRoom.walls[i].isDoor)
+            {
+                GUIStyle doorStyle = new GUIStyle(GUI.skin.box);
+                doorStyle.normal.background = MakeTex(25, 5, Color.red);
+                Rect doorPos = CalculateDoorRect(i);
+                GUI.Box(doorPos, GUIContent.none, doorStyle);
+            }
+        }
+    }
+
+    Rect CalculateDoorRect(int ind)
+    {
+        Rect pos = new Rect((position.width / 2) - 40, (position.height / 2) - 40, 0, 0);
+        switch (ind)
+        {
+            case 0:
+                pos.x += 20;
+                pos.y -= 5;
+                pos.width = 40;
+                pos.height = 10;
+                break;
+            case 1:
+                pos.x += 75;
+                pos.y += 20;
+                pos.width = 10;
+                pos.height = 40;
+                break;
+            case 2:
+                pos.x += 20;
+                pos.y += 75;
+                pos.width = 40;
+                pos.height = 10;
+                break;
+            case 3:
+                pos.x -= 5;
+                pos.y += 20;
+                pos.width = 10;
+                pos.height = 40;
+                break;
+        }
+
+        return pos;
+    }
+
+    Texture2D MakeTex(int width, int height, Color color)
+    {
+        Color[] pix = new Color[width * height];
+        for (int i = 0; i < pix.Length; ++i)
+        {
+            pix[i] = color;
+        }
+        Texture2D result = new Texture2D(width, height);
+        result.SetPixels(pix);
+        result.Apply();
+        return result;
     }
 
     private void DuringSceneGUI(SceneView view)
@@ -111,6 +191,7 @@ public class RoomSpawner : EditorWindow
                         }
                     }
                 }
+                Repaint();
             }
 
             rect.y += rect.height + 2;
@@ -207,7 +288,9 @@ public class RoomSpawner : EditorWindow
         Transform toSpawn = (Transform)PrefabUtility.InstantiatePrefab(pref);
         toSpawn.SetPositionAndRotation(pose, Quaternion.identity);
         Undo.RegisterCreatedObjectUndo(toSpawn.gameObject, "Spawn prefab");
+        movesDone++;
 
+        lastRoomPlaced = toSpawn;
         toSpawn.gameObject.GetComponent<Room>().CheckOtherRooms();
     }
 }

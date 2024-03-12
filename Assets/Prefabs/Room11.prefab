@@ -226,7 +226,7 @@ MonoBehaviour:
     pieceOfWall: {fileID: 8960755061351528923}
   - isDoor: 1
     pieceOfWall: {fileID: 8467218347435719636}
-  checkDistance: 10
+  checkDistance: 1
   distancefromRooms: 1.1
   roomMask:
     serializedVersion: 2
